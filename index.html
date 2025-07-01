@@ -107,6 +107,7 @@
       z-index: 1000;
     }
   </style>
+  <script src="https://unpkg.com/monaco-editor@latest/min/vs/loader.js"></script>
 </head>
 <body>
   <div class="appbar">
@@ -115,6 +116,7 @@
       <button onclick="copyMessage()">📋 Copy</button>
       <button onclick="downloadMessage()">⬇️ Download</button>
       <button onclick="toggleTheme()">🌗 Theme</button>
+        <button onclick="toggleEditor()" id="editBtn">✏️ Edit</button>
       <button onclick="shareMessage()">🔗 Share</button>
     </div>
   </div>
@@ -125,68 +127,152 @@
     <h2 id="heading">Loading Heading...</h2>
     <div class="meta" id="details">Loading details...</div>
     <div class="message" id="output">Loading message...</div>
+    <div id="editorContainer" style="height: 300px; width: 100%; display: none; border: 1px solid gray; margin-top: 20px;"></div>
+
   </div>
 
   <script>
-    const urlParams = new URLSearchParams(window.location.search);
 
-    const heading = urlParams.get('heading');
-    const text = urlParams.get('text');
-    const sender = urlParams.get('sender');
-    const receiver = urlParams.get('receiver');
-    const datetime = urlParams.get('datetime');
+    // document.body.classList.toggle('dark');
 
-    const headingText = heading ? decodeURIComponent(heading.replace(/\+/g, ' ')) : 'No Heading';
-    const messageText = text ? decodeURIComponent(text.replace(/\+/g, ' ')) : 'No Message';
-    const senderText = sender ? decodeURIComponent(sender.replace(/\+/g, ' ')) : 'Unknown Sender';
-    const receiverText = receiver ? decodeURIComponent(receiver.replace(/\+/g, ' ')) : 'Unknown Receiver';
-    const dateTimeText = datetime ? decodeURIComponent(datetime.replace(/\+/g, ' ')) : new Date().toLocaleString();
+  const urlParams = new URLSearchParams(window.location.search);
 
-    document.getElementById('heading').textContent = headingText;
-    document.getElementById('output').textContent = messageText;
-    document.getElementById('details').textContent =
-      `From: ${senderText} | To: ${receiverText} | Sent: ${dateTimeText}`;
+  const heading = urlParams.get('heading');
+  const text = urlParams.get('text');
+  const sender = urlParams.get('sender');
+  const receiver = urlParams.get('receiver');
+  const datetime = urlParams.get('datetime');
 
-    function toggleTheme() {
-      document.body.classList.toggle('dark');
+  const headingText = heading ? decodeURIComponent(heading.replace(/\+/g, ' ')) : 'No Heading';
+  const messageText = text ? decodeURIComponent(text.replace(/\+/g, ' ')) : 'No Message';
+  const senderText = sender ? decodeURIComponent(sender.replace(/\+/g, ' ')) : 'Unknown Sender';
+  const receiverText = receiver ? decodeURIComponent(receiver.replace(/\+/g, ' ')) : 'Unknown Receiver';
+  const dateTimeText = datetime ? decodeURIComponent(datetime.replace(/\+/g, ' ')) : new Date().toLocaleString();
+
+  document.getElementById('heading').textContent = headingText;
+  document.getElementById('output').textContent = messageText;
+  document.getElementById('details').textContent =
+    `From: ${senderText} | To: ${receiverText} | Sent: ${dateTimeText}`;
+
+  function toggleTheme() {
+
+const isNowDark = document.body.classList.toggle('dark');
+console.log(isNowDark);
+
+    
+      if (window.monaco) {
+    const newTheme = isNowDark ? 'custom-light' : 'custom-dark';
+    monaco.editor.setTheme(newTheme);
+  }
+  }
+
+  function copyMessage() {
+    const message = document.getElementById('output').textContent;
+    navigator.clipboard.writeText(message).then(() => {
+      const alert = document.getElementById('copyAlert');
+      alert.style.display = 'block';
+      setTimeout(() => alert.style.display = 'none', 1500);
+    });
+  }
+
+  function downloadMessage() {
+    const message = document.getElementById('output').textContent;
+    const blob = new Blob([message], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'message.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function shareMessage() {
+    const message = document.getElementById('output').textContent;
+    const heading = document.getElementById('heading').textContent;
+    const details = document.getElementById('details').textContent;
+
+    const fullMessage = `${heading}\n${details}\n\n${message}`;
+
+    if (navigator.share) {
+      navigator.share({
+        title: heading,
+        text: fullMessage
+      }).catch(err => console.log('Share failed:', err));
+    } else {
+      alert('Sharing is not supported on this browser.');
     }
+  }
 
-    function copyMessage() {
-      const message = document.getElementById('output').textContent;
-      navigator.clipboard.writeText(message).then(() => {
-        const alert = document.getElementById('copyAlert');
-        alert.style.display = 'block';
-        setTimeout(() => alert.style.display = 'none', 1500);
+</script>
+
+
+<script>
+  let editorInstance;
+  let editorLoaded = false;
+
+  function toggleEditor() {
+    const output = document.getElementById('output');
+    const container = document.getElementById('editorContainer');
+    const btn = document.getElementById('editBtn');
+
+    if (!editorLoaded) {
+      require.config({ paths: { 'vs': 'https://unpkg.com/monaco-editor@latest/min/vs' } });
+      require(['vs/editor/editor.main'], function () {
+
+        monaco.editor.defineTheme('custom-dark', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [],
+        colors: {
+            'editor.background': '#1e1e1e'
+        }
+        });
+
+        monaco.editor.defineTheme('custom-light', {
+        base: 'vs',
+        inherit: true,
+        rules: [],
+        colors: {
+            'editor.background': '#ffffff'
+        }
+        });
+
+  const isDark = document.body.classList.contains('dark');
+      const activeTheme = isDark ? 'custom-light' : 'custom-dark';
+    
+      
+        editorInstance = monaco.editor.create(container, {
+            // value: "Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC,",
+          value: output.innerText,
+          language: 'markdown',
+       theme: activeTheme,
+          automaticLayout: true,
+           wordWrap: 'on' 
+        });
+        editorLoaded = true;
+        output.style.display = 'none';
+        container.style.display = 'block';
+        btn.textContent = '💾 Save';
+
+
       });
-    }
-
-    function downloadMessage() {
-      const message = document.getElementById('output').textContent;
-      const blob = new Blob([message], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'message.txt';
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    function shareMessage() {
-      const message = document.getElementById('output').textContent;
-      const heading = document.getElementById('heading').textContent;
-      const details = document.getElementById('details').textContent;
-
-      const fullMessage = `${heading}\n${details}\n\n${message}`;
-
-      if (navigator.share) {
-        navigator.share({
-          title: heading,
-          text: fullMessage
-        }).catch(err => console.log('Share failed:', err));
+    } else {
+      if (container.style.display === 'none') {
+        output.style.display = 'none';
+        container.style.display = 'block';
+        btn.textContent = '💾 Save';
       } else {
-        alert('Sharing is not supported on this browser.');
+        output.textContent = editorInstance.getValue();
+        container.style.display = 'none';
+        output.style.display = 'block';
+        btn.textContent = '✏️ Edit';
       }
     }
-  </script>
+  }
+</script>
+
+
+
+
 </body>
 </html>
